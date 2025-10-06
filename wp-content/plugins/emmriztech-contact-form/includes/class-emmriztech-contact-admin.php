@@ -3,6 +3,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * EmmrizTech_Contact_Admin
+ *
+ * Upgraded admin class: messages listing, modal view, delete, export.
+ */
 class EmmrizTech_Contact_Admin {
     /**
      * @var EmmrizTech_Contact_DB
@@ -12,40 +17,22 @@ class EmmrizTech_Contact_Admin {
     public function __construct() {
         $this->db = EmmrizTech_Contact_DB::instance();
 
-        add_action('admin_menu', [$this, 'add_admin_menu']);
-        add_action('admin_init', [$this, 'register_settings']);
-        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+
+        // AJAX handlers for modal view and delete
+        add_action('wp_ajax_emmriztech_get_message', array($this, 'ajax_get_message'));
+        add_action('wp_ajax_emmriztech_delete_message', array($this, 'ajax_delete_message'));
     }
 
-    /**
-     * Enqueue admin assets only on our pages
-     *
-     * @param string $hook
-     */
-    public function enqueue_admin_assets($hook) {
-        if (strpos($hook, 'emmriztech-contact') === false && strpos($hook, 'emmriztech_contact') === false) {
-            return;
-        }
-
-        wp_enqueue_script(
-            'emmriztech-admin-js',
-            EMMRIZTECH_CF_URL . 'assets/js/admin.js',
-            ['jquery'],
-            EMMRIZTECH_CF_VERSION,
-            true
-        );
-    }
-
-    /**
-     * Add plugin menu and submenu
-     */
     public function add_admin_menu() {
         add_menu_page(
             'EmmrizTech Contact',
             'EmmrizTech Contact',
             'manage_options',
             'emmriztech-contact',
-            [$this, 'settings_page'],
+            array($this, 'settings_page'),
             'dashicons-email-alt',
             26
         );
@@ -56,27 +43,40 @@ class EmmrizTech_Contact_Admin {
             'Messages',
             'manage_options',
             'emmriztech-contact-messages',
-            [$this, 'messages_page']
+            array($this, 'messages_page')
         );
     }
 
-    /**
-     * Register settings group
-     */
     public function register_settings() {
         register_setting('emmriztech_cf_settings_group', 'emmriztech_cf_settings');
     }
 
-    /**
-     * Settings page markup
-     */
-    public function settings_page() {
-        if (!current_user_can('manage_options')) {
+    public function enqueue_admin_assets($hook) {
+        // Only load our assets on plugin admin pages
+        if (strpos($hook, 'emmriztech-contact') === false && strpos($hook, 'emmriztech_contact') === false) {
             return;
         }
 
-        $settings = get_option('emmriztech_cf_settings', []);
+        // CSS for admin modal/table
+        wp_enqueue_style('emmriztech-admin-css', EMMRIZTECH_CF_URL . 'assets/css/admin.css', array(), EMMRIZTECH_CF_VERSION);
 
+        // Small helper JS
+        wp_enqueue_script('emmriztech-admin-js', EMMRIZTECH_CF_URL . 'assets/js/admin.js', array('jquery'), EMMRIZTECH_CF_VERSION, true);
+
+        // Localize script with nonce and ajax URL
+        wp_localize_script('emmriztech-admin-js', 'EmmrizTechAdmin', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('emmriztech_admin_nonce'),
+            'confirm_delete' => __('Delete this message?', 'emmriztech-contact-form'),
+        ));
+    }
+
+    /**
+     * Settings page (keeps simple - same as before)
+     */
+    public function settings_page() {
+        if (!current_user_can('manage_options')) return;
+        $settings = get_option('emmriztech_cf_settings', array());
         ?>
         <div class="wrap">
             <h1>EmmrizTech Contact Settings</h1>
@@ -91,24 +91,20 @@ class EmmrizTech_Contact_Admin {
                                 <p class="description">Where contact messages are sent. Defaults to site admin email if empty.</p>
                             </td>
                         </tr>
-
                         <tr>
                             <th scope="row"><label for="success_message">Success Message</label></th>
                             <td>
                                 <input name="emmriztech_cf_settings[success_message]" type="text" id="success_message" value="<?php echo esc_attr($settings['success_message'] ?? 'Message sent successfully!'); ?>" class="regular-text" />
                             </td>
                         </tr>
-
                         <tr>
                             <th scope="row"><label for="error_message">Error Message</label></th>
                             <td>
                                 <input name="emmriztech_cf_settings[error_message]" type="text" id="error_message" value="<?php echo esc_attr($settings['error_message'] ?? 'Something went wrong. Please try again.'); ?>" class="regular-text" />
                             </td>
                         </tr>
-
                     </tbody>
                 </table>
-
                 <?php submit_button('Save Settings'); ?>
             </form>
         </div>
@@ -123,19 +119,34 @@ class EmmrizTech_Contact_Admin {
             wp_die(__('Insufficient permissions', 'emmriztech-contact-form'));
         }
 
-        // Handle actions first (delete, export, view, bulk delete)
-        $this->maybe_handle_actions();
+        // Process export if requested (GET action=export)
+        if (isset($_GET['action']) && $_GET['action'] === 'export') {
+            $this->export_csv();
+        }
 
-        // Fetch list
+        // Process bulk delete if POSTed
+        if (isset($_POST['bulk_delete']) && !empty($_POST['ids'])) {
+            if (empty($_POST['emmriztech_messages_nonce']) || !wp_verify_nonce($_POST['emmriztech_messages_nonce'], 'emmriztech_messages_action')) {
+                wp_die(__('Invalid request', 'emmriztech-contact-form'));
+            }
+            $ids = array_map('intval', (array) $_POST['ids']);
+            foreach ($ids as $id) {
+                $this->db->delete_message($id);
+            }
+            wp_safe_redirect(menu_page_url('emmriztech-contact-messages', false));
+            exit;
+        }
+
+        // Get pagination/search params
         $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
         $s = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
         $per_page = 20;
 
-        $result = $this->db->get_messages([
+        $result = $this->db->get_messages(array(
             'paged' => $paged,
             'per_page' => $per_page,
             's' => $s,
-        ]);
+        ));
 
         $total = $result['total'];
         $rows = $result['rows'];
@@ -143,7 +154,7 @@ class EmmrizTech_Contact_Admin {
         $base_page = menu_page_url('emmriztech-contact-messages', false);
         ?>
         <div class="wrap">
-            <h1 class="wp-heading-inline">Messages</h1>
+            <h1 class="wp-heading-inline">EmmrizTech Messages</h1>
             <a href="<?php echo esc_url(add_query_arg('action', 'export', $base_page)); ?>" class="page-title-action">Export CSV</a>
             <a href="<?php echo esc_url(menu_page_url('emmriztech-contact', false)); ?>" class="page-title-action" style="margin-left:10px;">Settings</a>
 
@@ -151,11 +162,8 @@ class EmmrizTech_Contact_Admin {
 
             <form method="get" class="search-form" style="margin-bottom:16px;">
                 <input type="hidden" name="page" value="emmriztech-contact-messages" />
-                <?php
-                $label = __('Search Messages', 'emmriztech-contact-form');
-                ?>
                 <p class="search-box">
-                    <label class="screen-reader-text" for="emmriztech-search-input"><?php echo esc_html($label); ?>:</label>
+                    <label class="screen-reader-text" for="emmriztech-search-input"><?php echo esc_html__('Search Messages', 'emmriztech-contact-form'); ?>:</label>
                     <input type="search" id="emmriztech-search-input" name="s" value="<?php echo esc_attr($s); ?>" />
                     <input type="submit" id="search-submit" class="button" value="Search">
                 </p>
@@ -167,7 +175,7 @@ class EmmrizTech_Contact_Admin {
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <td id="cb" class="manage-column column-cb check-column" scope="col"><input id="emmriztech-select-all" type="checkbox" /></td>
+                            <td class="manage-column column-cb check-column"><input id="emmriztech-select-all" type="checkbox" /></td>
                             <th scope="col">ID</th>
                             <th scope="col">Name</th>
                             <th scope="col">Email</th>
@@ -193,14 +201,11 @@ class EmmrizTech_Contact_Admin {
                                     <td><a href="mailto:<?php echo esc_attr($row['email']); ?>"><?php echo esc_html($row['email']); ?></a></td>
                                     <td><?php echo esc_html($row['phone']); ?></td>
                                     <td><?php echo esc_html($row['option_selected']); ?></td>
-                                    <td><?php echo esc_html(wp_trim_words($row['message'], 15, '...')); ?></td>
+                                    <td><?php echo esc_html(wp_trim_words($row['message'], 12, '...')); ?></td>
                                     <td><?php echo esc_html($row['created_at']); ?></td>
                                     <td>
-                                        <a href="<?php echo esc_url(add_query_arg(['action' => 'view', 'id' => $row['id']])); ?>">View</a> |
-                                        <?php
-                                        $delete_url = wp_nonce_url(add_query_arg(['action' => 'delete', 'id' => $row['id']]), 'emmriztech_delete_message_' . $row['id']);
-                                        ?>
-                                        <a href="<?php echo esc_url($delete_url); ?>" onclick="return confirm('Delete this message?');">Delete</a>
+                                        <a href="#" class="emmriztech-view-message" data-id="<?php echo esc_attr($row['id']); ?>">View</a> |
+                                        <a href="#" class="emmriztech-delete-message" data-id="<?php echo esc_attr($row['id']); ?>">Delete</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -218,100 +223,114 @@ class EmmrizTech_Contact_Admin {
             // pagination
             $num_pages = max(1, ceil($total / $per_page));
             if ($num_pages > 1) {
-                $page_links = paginate_links([
+                $page_links = paginate_links(array(
                     'base' => add_query_arg('paged', '%#%'),
                     'format' => '?paged=%#%',
                     'current' => $paged,
                     'total' => $num_pages,
-                    'add_args' => ['page' => 'emmriztech-contact-messages'],
-                ]);
+                    'add_args' => array('page' => 'emmriztech-contact-messages'),
+                ));
                 echo '<div class="tablenav">' . $page_links . '</div>';
             }
             ?>
 
         </div>
+
+        <!-- Modal container -->
+        <div id="emmriztech-modal" class="emmriztech-modal" aria-hidden="true" style="display:none;">
+            <div class="emmriztech-modal-inner">
+                <button id="emmriztech-modal-close" class="emmriztech-modal-close" aria-label="<?php esc_attr_e('Close', 'emmriztech-contact-form'); ?>">&times;</button>
+                <div id="emmriztech-modal-content" class="emmriztech-modal-content">
+                    <!-- AJAX content injected here -->
+                </div>
+            </div>
+        </div>
         <?php
     }
 
     /**
-     * Handle delete/view/export/bulk actions.
+     * AJAX: return a single message HTML for the modal
      */
-    private function maybe_handle_actions() {
-        // require manage_options
+    public function ajax_get_message() {
         if (!current_user_can('manage_options')) {
-            return;
+            wp_send_json_error('forbidden', 403);
         }
 
-        // Single delete via GET (nonce protected)
-        if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'delete') {
-            $id = intval($_GET['id']);
-            $nonce = $_REQUEST['_wpnonce'] ?? '';
-            if (wp_verify_nonce($nonce, 'emmriztech_delete_message_' . $id)) {
-                $this->db->delete_message($id);
-                // redirect to clean URL
-                wp_safe_redirect(remove_query_arg(['action', 'id', '_wpnonce']));
-                exit;
-            } else {
-                wp_die(__('Invalid nonce for delete action', 'emmriztech-contact-form'));
-            }
+        check_ajax_referer('emmriztech_admin_nonce', 'nonce');
+
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if ($id <= 0) {
+            wp_send_json_error('invalid_id', 400);
         }
 
-        // View single message - render and exit (simple approach)
-        if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'view') {
-            $id = intval($_GET['id']);
-            $msg = $this->db->get_message($id);
-            if ($msg) {
-                echo '<div class="wrap">';
-                echo '<h1>Message #' . esc_html($msg['id']) . '</h1>';
-                echo '<p><strong>Name:</strong> ' . esc_html($msg['name']) . '</p>';
-                echo '<p><strong>Email:</strong> <a href="mailto:' . esc_attr($msg['email']) . '">' . esc_html($msg['email']) . '</a></p>';
-                echo '<p><strong>Phone:</strong> ' . esc_html($msg['phone']) . '</p>';
-                echo '<p><strong>Option:</strong> ' . esc_html($msg['option_selected']) . '</p>';
-                echo '<p><strong>IP:</strong> ' . esc_html($msg['ip']) . '</p>';
-                echo '<p><strong>User Agent:</strong> ' . esc_html($msg['user_agent']) . '</p>';
-                echo '<h2>Message</h2>';
-                echo '<div style="padding:12px;border:1px solid #ddd;background:#fff;white-space:pre-wrap;">' . esc_html($msg['message']) . '</div>';
-                echo '<p style="margin-top:16px;"><a class="button" href="' . esc_url(menu_page_url('emmriztech-contact-messages', false)) . '">Back to messages</a></p>';
-                echo '</div>';
-                exit;
-            } else {
-                wp_safe_redirect(menu_page_url('emmriztech-contact-messages', false));
-                exit;
-            }
+        $msg = $this->db->get_message($id);
+        if (!$msg) {
+            wp_send_json_error('not_found', 404);
         }
 
-        // Bulk delete via POST
-        if (isset($_POST['bulk_delete']) && !empty($_POST['ids'])) {
-            if (empty($_POST['emmriztech_messages_nonce']) || !wp_verify_nonce($_POST['emmriztech_messages_nonce'], 'emmriztech_messages_action')) {
-                wp_die(__('Invalid nonce for bulk delete', 'emmriztech-contact-form'));
-            }
+        // prepare HTML (escaped)
+        ob_start();
+        ?>
+        <h2>Message #<?php echo esc_html($msg['id']); ?></h2>
+        <p><strong><?php esc_html_e('Name', 'emmriztech-contact-form'); ?>:</strong> <?php echo esc_html($msg['name']); ?></p>
+        <p><strong><?php esc_html_e('Email', 'emmriztech-contact-form'); ?>:</strong> <a href="mailto:<?php echo esc_attr($msg['email']); ?>"><?php echo esc_html($msg['email']); ?></a></p>
+        <p><strong><?php esc_html_e('Phone', 'emmriztech-contact-form'); ?>:</strong> <?php echo esc_html($msg['phone']); ?></p>
+        <p><strong><?php esc_html_e('Option', 'emmriztech-contact-form'); ?>:</strong> <?php echo esc_html($msg['option_selected']); ?></p>
+        <p><strong><?php esc_html_e('IP', 'emmriztech-contact-form'); ?>:</strong> <?php echo esc_html($msg['ip']); ?></p>
+        <p><strong><?php esc_html_e('User Agent', 'emmriztech-contact-form'); ?>:</strong> <?php echo esc_html($msg['user_agent']); ?></p>
+        <h3><?php esc_html_e('Message', 'emmriztech-contact-form'); ?></h3>
+        <div style="white-space:pre-wrap;padding:10px;border:1px solid #ddd;background:#fff;"><?php echo esc_html($msg['message']); ?></div>
+        <p style="margin-top:12px;">
+            <button class="button emmriztech-delete-message" data-id="<?php echo esc_attr($msg['id']); ?>"><?php esc_html_e('Delete', 'emmriztech-contact-form'); ?></button>
+            <button class="button emmriztech-modal-close-inline"><?php esc_html_e('Close', 'emmriztech-contact-form'); ?></button>
+        </p>
+        <?php
+        $html = ob_get_clean();
 
-            $ids = array_map('intval', (array) $_POST['ids']);
-            foreach ($ids as $id) {
-                $this->db->delete_message($id);
-            }
+        wp_send_json_success(array('html' => $html));
+    }
+
+    /**
+     * AJAX: delete a single message
+     */
+    public function ajax_delete_message() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('forbidden', 403);
+        }
+
+        check_ajax_referer('emmriztech_admin_nonce', 'nonce');
+
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if ($id <= 0) {
+            wp_send_json_error('invalid_id', 400);
+        }
+
+        $deleted = $this->db->delete_message($id);
+        if ($deleted) {
+            wp_send_json_success('deleted');
+        } else {
+            wp_send_json_error('delete_failed', 500);
+        }
+    }
+
+    /**
+     * Export CSV of all messages and exit
+     */
+    protected function export_csv() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'emmriztech-contact-form'));
+        }
+
+        $csv = $this->db->export_csv();
+        if ($csv === '') {
             wp_safe_redirect(menu_page_url('emmriztech-contact-messages', false));
             exit;
         }
 
-        // Export CSV (action=export) - must be GET and managed by admins
-        if (isset($_GET['action']) && $_GET['action'] === 'export') {
-            if (!current_user_can('manage_options')) {
-                wp_die(__('Insufficient permissions', 'emmriztech-contact-form'));
-            }
-
-            $csv = $this->db->export_csv();
-            if ($csv === '') {
-                wp_safe_redirect(menu_page_url('emmriztech-contact-messages', false));
-                exit;
-            }
-
-            // Output CSV and exit
-            $filename = 'emmriztech_messages_' . date('Y-m-d') . '.csv';
-            header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename=' . $filename);
-            echo $csv;
-            exit;
-        }
+        $filename = 'emmriztech_messages_' . date('Y-m-d') . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+        echo $csv;
+        exit;
     }
 }
