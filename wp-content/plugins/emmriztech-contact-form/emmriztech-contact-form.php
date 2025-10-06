@@ -1,28 +1,38 @@
 <?php
 /**
- * Plugin Name: EmmrizTech Contact Form
- * Plugin URI: https://emmriztech.com/
- * Description: A secure and responsive contact form plugin with multiple templates using TailwindCSS.
- * Version: 1.1.0
- * Author: EmmrizTech
- * Author URI: https://emmriztech.com/
- * License: GPLv2 or later
- * Text Domain: emmriztech-contact-form
- */
+* Plugin Name: EmmrizTech Contact Form
+* Plugin URI: https://emmriztech.com/
+* Description: Production-ready contact form with Tailwind, admin settings, and message logging.
+* Version: 1.2.0
+* Author: EmmrizTech
+* Text Domain: emmriztech-contact-form
+* License: GPLv2 or later
+*/
+
 
 if (!defined('ABSPATH')) exit;
 
-// Define constants
+
 define('EMMRIZTECH_CF_PATH', plugin_dir_path(__FILE__));
 define('EMMRIZTECH_CF_URL', plugin_dir_url(__FILE__));
-define('EMMRIZTECH_CF_VERSION', '1.1.0');
+define('EMMRIZTECH_CF_VERSION', '1.2.0');
+
 
 // Includes
+require_once EMMRIZTECH_CF_PATH . 'includes/class-emmriztech-contact-db.php';
 require_once EMMRIZTECH_CF_PATH . 'includes/class-emmriztech-contact-form.php';
 require_once EMMRIZTECH_CF_PATH . 'includes/class-emmriztech-contact-admin.php';
 
-// Initialize plugin
+
+// Initialize
 add_action('plugins_loaded', function() {
-    new EmmrizTech_Contact_Form();
-    new EmmrizTech_Contact_Admin();
+// DB handler must be ready early
+EmmrizTech_Contact_DB::instance();
+new EmmrizTech_Contact_Form();
+new EmmrizTech_Contact_Admin();
 });
+
+
+// Activation / Deactivation hooks
+register_activation_hook(__FILE__, ['EmmrizTech_Contact_DB', 'install']);
+register_deactivation_hook(__FILE__, ['EmmrizTech_Contact_DB', 'deactivate']);
