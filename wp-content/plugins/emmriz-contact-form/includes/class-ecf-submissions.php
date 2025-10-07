@@ -27,8 +27,22 @@ class ECF_Submissions {
     }
     
     private function init_hooks() {
-        add_action('plugins_loaded', array($this, 'create_table'));
+        add_action('init', array($this, 'check_table'));
         register_activation_hook(ECF_PLUGIN_BASENAME, array($this, 'create_table'));
+    }
+    
+    /**
+     * Check if table exists and create if needed
+     */
+    public function check_table() {
+        global $wpdb;
+        
+        // Check if table exists
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$this->table_name}'") === $this->table_name;
+        
+        if (!$table_exists) {
+            $this->create_table();
+        }
     }
     
     /**
@@ -55,6 +69,11 @@ class ECF_Submissions {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        
+        // Log any errors
+        if (!empty($wpdb->last_error)) {
+            error_log('ECF Table Creation Error: ' . $wpdb->last_error);
+        }
     }
     
     /**
@@ -67,7 +86,7 @@ class ECF_Submissions {
         $clean_data = array();
         foreach ($form_data as $key => $value) {
             if (strpos($key, 'ecf_') !== 0 || $key === 'ecf_honeypot') {
-                if ($key !== 'nonce' && $key !== '_wp_http_referer') {
+                if ($key !== 'nonce' && $key !== '_wp_http_referer' && $key !== 'ecf_submit') {
                     $clean_data[$key] = is_array($value) ? array_map('sanitize_text_field', $value) : sanitize_text_field($value);
                 }
             }
@@ -143,6 +162,28 @@ class ECF_Submissions {
     }
     
     /**
+     * Get submission count for a form
+     */
+    public function get_submission_count($form_id) {
+        global $wpdb;
+        
+        return $wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM {$this->table_name} WHERE form_id = %d", $form_id)
+        );
+    }
+    
+    /**
+     * Get unread submission count for a form
+     */
+    public function get_unread_count($form_id) {
+        global $wpdb;
+        
+        return $wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM {$this->table_name} WHERE form_id = %d AND read_status = 0", $form_id)
+        );
+    }
+    
+    /**
      * Mark submission as read
      */
     public function mark_as_read($submission_id) {
@@ -171,25 +212,35 @@ class ECF_Submissions {
     }
     
     /**
-     * Get submission count for a form
+     * Get all submissions (for admin list)
      */
-    public function get_submission_count($form_id) {
+    public function get_all_submissions($limit = 50, $offset = 0) {
         global $wpdb;
         
-        return $wpdb->get_var(
-            $wpdb->prepare("SELECT COUNT(*) FROM {$this->table_name} WHERE form_id = %d", $form_id)
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$this->table_name} ORDER BY submitted_at DESC LIMIT %d OFFSET %d",
+                $limit, $offset
+            )
         );
     }
     
     /**
-     * Get unread submission count for a form
+     * Get total submissions count
      */
-    public function get_unread_count($form_id) {
+    public function get_total_submission_count() {
         global $wpdb;
         
-        return $wpdb->get_var(
-            $wpdb->prepare("SELECT COUNT(*) FROM {$this->table_name} WHERE form_id = %d AND read_status = 0", $form_id)
-        );
+        return $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name}");
+    }
+    
+    /**
+     * Get total unread count
+     */
+    public function get_total_unread_count() {
+        global $wpdb;
+        
+        return $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE read_status = 0");
     }
 }
 ?>

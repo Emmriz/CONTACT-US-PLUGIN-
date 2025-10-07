@@ -42,27 +42,36 @@ class ECF_Drag_Drop_Builder {
     }
     
     /**
-     * Render the builder page
+     * Render the builder page - FIXED VERSION
      */
     public function render_builder_page() {
+        // Check if we need to create a new form - do this BEFORE any output
         $form_id = isset($_GET['form_id']) ? intval($_GET['form_id']) : 0;
-        $form_builder = ECF_Form_Builder::get_instance();
         
-        // Create new form if no form ID provided
+        // If no form ID provided, create a new form and redirect properly
         if (!$form_id) {
-            $form_id = $form_builder->create_form(__('New Contact Form', 'emmriz-contact-form'));
-            if ($form_id) {
-                wp_redirect(admin_url('edit.php?post_type=ecf_form&page=ecf-builder&form_id=' . $form_id));
-                exit;
+            $form_builder = ECF_Form_Builder::get_instance();
+            $new_form_id = $form_builder->create_form(__('New Contact Form', 'emmriz-contact-form'));
+            
+            if ($new_form_id && !is_wp_error($new_form_id)) {
+                // Use JavaScript redirect instead of wp_redirect to avoid header issues
+                echo '<script>window.location.href = "' . admin_url('edit.php?post_type=ecf_form&page=ecf-builder&form_id=' . $new_form_id) . '";</script>';
+                echo '<p>Redirecting to new form... <a href="' . admin_url('edit.php?post_type=ecf_form&page=ecf-builder&form_id=' . $new_form_id) . '">Click here if not redirected</a></p>';
+                return;
+            } else {
+                wp_die(__('Error creating new form.', 'emmriz-contact-form'));
             }
         }
         
+        // Now we have a form ID, proceed with rendering
+        $form_builder = ECF_Form_Builder::get_instance();
         $form = $form_builder->get_form($form_id);
         
         if (!$form) {
             wp_die(__('Form not found.', 'emmriz-contact-form'));
         }
         
+        // Include the builder template
         include ECF_PLUGIN_PATH . 'templates/form-builder.php';
     }
     
@@ -74,9 +83,31 @@ class ECF_Drag_Drop_Builder {
             return;
         }
         
+        wp_enqueue_style('ecf-admin');
         wp_enqueue_style('ecf-builder');
+        
+        // Sortable.js for drag & drop
+        wp_enqueue_script('ecf-sortable');
+        
+        // Builder JS
         wp_enqueue_script('ecf-builder');
+        
+        // Admin JS
         wp_enqueue_script('ecf-admin');
+        
+        // Localize builder data
+        $form_id = isset($_GET['form_id']) ? intval($_GET['form_id']) : 0;
+        $form_builder = ECF_Form_Builder::get_instance();
+        $form = $form_builder->get_form($form_id);
+        
+        wp_localize_script('ecf-builder', 'ecf_builder', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('ecf_builder_nonce'),
+            'form_id' => $form_id,
+            'form_data' => $form ? $form['data'] : array(),
+            'field_types' => $this->get_field_types(),
+            'i18n' => $this->get_builder_translations()
+        ));
     }
     
     /**
@@ -128,6 +159,23 @@ class ECF_Drag_Drop_Builder {
                 )
             )
         ));
+    }
+    
+    /**
+     * Get builder translations
+     */
+    private function get_builder_translations() {
+        return array(
+            'addField' => __('Add Field', 'emmriz-contact-form'),
+            'deleteField' => __('Delete Field', 'emmriz-contact-form'),
+            'duplicateField' => __('Duplicate Field', 'emmriz-contact-form'),
+            'fieldSettings' => __('Field Settings', 'emmriz-contact-form'),
+            'preview' => __('Preview', 'emmriz-contact-form'),
+            'builder' => __('Builder', 'emmriz-contact-form'),
+            'saveForm' => __('Save Form', 'emmriz-contact-form'),
+            'formSaved' => __('Form Saved!', 'emmriz-contact-form'),
+            'confirmDelete' => __('Are you sure you want to delete this field?', 'emmriz-contact-form')
+        );
     }
 }
 ?>

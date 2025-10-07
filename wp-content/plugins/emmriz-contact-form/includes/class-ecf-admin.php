@@ -72,16 +72,6 @@ class ECF_Admin {
             'ecf-submissions',
             array($this, 'render_submissions_page')
         );
-        
-        // Settings submenu
-        add_submenu_page(
-            'edit.php?post_type=ecf_form',
-            __('Settings', 'emmriz-contact-form'),
-            __('Settings', 'emmriz-contact-form'),
-            'manage_options',
-            'ecf-settings',
-            array($this, 'render_settings_page')
-        );
     }
     
     /**
@@ -98,6 +88,9 @@ class ECF_Admin {
                 }
             }
         }
+        
+        // Check and create table if needed
+        ECF_Submissions::get_instance()->check_table();
     }
     
     /**
@@ -115,31 +108,76 @@ class ECF_Admin {
         return $new_columns;
     }
     
+    // /**
+    //  * Manage custom columns content
+    //  */
+    // public function manage_custom_columns($column, $post_id) {
+    //     switch ($column) {
+    //         case 'shortcode':
+    //             echo '<code>[emmriz_contact_form id="' . $post_id . '"]</code>';
+    //             break;
+                
+    //         case 'submissions':
+    //             try {
+    //                 $count = ECF_Submissions::get_instance()->get_submission_count($post_id);
+    //                 $unread = ECF_Submissions::get_instance()->get_unread_count($post_id);
+                    
+    //                 if ($count > 0) {
+    //                     $url = admin_url('edit.php?post_type=ecf_form&page=ecf-submissions&form_id=' . $post_id);
+    //                     echo '<a href="' . esc_url($url) . '">' . $count . '</a>';
+    //                     if ($unread > 0) {
+    //                         echo ' <span class="ecf-unread-count">(' . $unread . ' ' . __('unread', 'emmriz-contact-form') . ')</span>';
+    //                     }
+    //                 } else {
+    //                     echo '0';
+    //                 }
+    //             } catch (Exception $e) {
+    //                 echo '0';
+    //                 error_log('ECF Submissions Error: ' . $e->getMessage());
+    //             }
+    //             break;
+    //     }
+    // }
+
     /**
-     * Manage custom columns content
-     */
-    public function manage_custom_columns($column, $post_id) {
-        switch ($column) {
-            case 'shortcode':
-                echo '<code>[emmriz_contact_form id="' . $post_id . '"]</code>';
-                break;
+ * Manage custom columns content
+ */
+public function manage_custom_columns($column, $post_id) {
+    switch ($column) {
+        case 'shortcode':
+            echo '<code>[emmriz_contact_form id="' . $post_id . '"]</code>';
+            break;
+            
+        case 'submissions':
+            try {
+                // Check if table exists first
+                global $wpdb;
+                $table_name = $wpdb->prefix . 'ecf_submissions';
+                $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$table_name}'") === $table_name;
                 
-            case 'submissions':
-                $count = ECF_Submissions::get_instance()->get_submission_count($post_id);
-                $unread = ECF_Submissions::get_instance()->get_unread_count($post_id);
-                
-                if ($count > 0) {
-                    $url = admin_url('edit.php?post_type=ecf_form&page=ecf-submissions&form_id=' . $post_id);
-                    echo '<a href="' . esc_url($url) . '">' . $count . '</a>';
-                    if ($unread > 0) {
-                        echo ' <span class="ecf-unread-count">(' . $unread . ' ' . __('unread', 'emmriz-contact-form') . ')</span>';
+                if ($table_exists) {
+                    $count = ECF_Submissions::get_instance()->get_submission_count($post_id);
+                    $unread = ECF_Submissions::get_instance()->get_unread_count($post_id);
+                    
+                    if ($count > 0) {
+                        $url = admin_url('edit.php?post_type=ecf_form&page=ecf-submissions&form_id=' . $post_id);
+                        echo '<a href="' . esc_url($url) . '">' . $count . '</a>';
+                        if ($unread > 0) {
+                            echo ' <span class="ecf-unread-count">(' . $unread . ' ' . __('unread', 'emmriz-contact-form') . ')</span>';
+                        }
+                    } else {
+                        echo '0';
                     }
                 } else {
                     echo '0';
                 }
-                break;
-        }
+            } catch (Exception $e) {
+                echo '0';
+                // Don't log every time as it can fill up logs
+            }
+            break;
     }
+}
     
     /**
      * Render submissions page
@@ -160,14 +198,22 @@ class ECF_Admin {
     private function render_form_submissions($form_id) {
         $form_builder = ECF_Form_Builder::get_instance();
         $form = $form_builder->get_form($form_id);
-        $submissions = ECF_Submissions::get_instance()->get_submissions($form_id, 50);
         
         if (!$form) {
             echo '<div class="wrap"><h1>' . __('Form not found', 'emmriz-contact-form') . '</h1></div>';
             return;
         }
         
-        include ECF_PLUGIN_PATH . 'templates/admin-submissions.php';
+        try {
+            $submissions = ECF_Submissions::get_instance()->get_submissions($form_id, 50);
+            include ECF_PLUGIN_PATH . 'templates/admin-submissions.php';
+        } catch (Exception $e) {
+            echo '<div class="wrap">';
+            echo '<div class="error"><p>' . __('Error loading submissions. The database table may need to be created.', 'emmriz-contact-form') . '</p></div>';
+            echo '<h1>' . sprintf(__('Submissions for: %s', 'emmriz-contact-form'), esc_html($form['title'])) . '</h1>';
+            echo '<p>' . __('Please try deactivating and reactivating the plugin to create the required database tables.', 'emmriz-contact-form') . '</p>';
+            echo '</div>';
+        }
     }
     
     /**
@@ -177,16 +223,6 @@ class ECF_Admin {
         echo '<div class="wrap">';
         echo '<h1>' . __('All Form Submissions', 'emmriz-contact-form') . '</h1>';
         echo '<p>' . __('Select a form from the list above to view its submissions.', 'emmriz-contact-form') . '</p>';
-        echo '</div>';
-    }
-    
-    /**
-     * Render settings page
-     */
-    public function render_settings_page() {
-        echo '<div class="wrap">';
-        echo '<h1>' . __('Emmriz Contact Form Settings', 'emmriz-contact-form') . '</h1>';
-        echo '<p>' . __('Settings page coming soon.', 'emmriz-contact-form') . '</p>';
         echo '</div>';
     }
 }
