@@ -64,7 +64,8 @@ class ECF_Shortcodes {
      */
     private function display_form($form) {
         // Check for submission result using the new method
-        $submission_result = ECF_Form_Handler::get_submission_result();
+        $form_handler = ECF_Form_Handler::get_instance();
+        $submission_result = $form_handler->get_submission_result();
         
         // Include form template
         include ECF_PLUGIN_PATH . 'templates/form-default.php';
