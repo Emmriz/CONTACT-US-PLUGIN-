@@ -73,6 +73,7 @@ final class Emmriz_Contact_Form {
         require_once $includes_path . 'class-ecf-email-handler.php';
         require_once $includes_path . 'class-ecf-shortcodes.php';
         require_once $includes_path . 'class-ecf-ajax.php';
+        require_once $includes_path . 'class-ecf-template-helper.php'; // Add this line
         
         // Admin interface
         if (is_admin()) {
