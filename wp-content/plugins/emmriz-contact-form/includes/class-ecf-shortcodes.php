@@ -63,16 +63,8 @@ class ECF_Shortcodes {
      * Display form with optional success/error messages
      */
     private function display_form($form) {
-        // Check for submission result
-        $submission_result = null;
-        if (!session_id()) {
-            session_start();
-        }
-        
-        if (isset($_SESSION['ecf_submission_result'])) {
-            $submission_result = $_SESSION['ecf_submission_result'];
-            unset($_SESSION['ecf_submission_result']);
-        }
+        // Check for submission result using the new method
+        $submission_result = ECF_Form_Handler::get_submission_result();
         
         // Include form template
         include ECF_PLUGIN_PATH . 'templates/form-default.php';

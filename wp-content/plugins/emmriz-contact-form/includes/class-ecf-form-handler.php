@@ -25,7 +25,7 @@ class ECF_Form_Handler {
     private function init_hooks() {
         add_action('wp_ajax_ecf_submit_form', array($this, 'handle_ajax_submission'));
         add_action('wp_ajax_nopriv_ecf_submit_form', array($this, 'handle_ajax_submission'));
-        add_action('wp_loaded', array($this, 'handle_regular_submission'));
+        add_action('template_redirect', array($this, 'handle_regular_submission')); // Changed to template_redirect
     }
     
     /**
@@ -44,14 +44,22 @@ class ECF_Form_Handler {
         } else {
             wp_send_json_error($result);
         }
+        
+        wp_die(); // Always die in AJAX handlers
     }
     
     /**
-     * Handle regular form submission
+     * Handle regular form submission - FIXED VERSION
      */
     public function handle_regular_submission() {
+        // Only process if it's our form submission
         if (!isset($_POST['ecf_submit']) || !isset($_POST['form_id'])) {
             return;
+        }
+        
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['ecf_nonce'], 'ecf_form_submission')) {
+            wp_die(__('Security verification failed.', 'emmriz-contact-form'));
         }
         
         $form_id = intval($_POST['form_id']);
@@ -59,19 +67,41 @@ class ECF_Form_Handler {
         
         $result = $this->process_submission($form_id, $form_data);
         
-        // Store result in session for display
-        if (!session_id()) {
-            session_start();
-        }
+        // Store result in a transient instead of session
+        $transient_key = 'ecf_submission_result_' . wp_generate_password(12, false);
+        set_transient($transient_key, $result, 30); // Store for 30 seconds
         
-        $_SESSION['ecf_submission_result'] = $result;
-        
-        // Redirect back to form page
+        // Get the referrer URL
         $referer = wp_get_referer();
-        if ($referer) {
-            wp_redirect($referer);
-            exit;
+        if (!$referer) {
+            $referer = home_url();
         }
+        
+        // Add the transient key to the URL
+        $redirect_url = add_query_arg('ecf_result', $transient_key, $referer);
+        
+        // Safe redirect
+        wp_safe_redirect($redirect_url);
+        exit; // Always exit after redirect
+    }
+    
+    /**
+     * Get submission result from transient
+     */
+    public static function get_submission_result() {
+        if (!isset($_GET['ecf_result'])) {
+            return null;
+        }
+        
+        $transient_key = sanitize_text_field($_GET['ecf_result']);
+        $result = get_transient($transient_key);
+        
+        // Clean up the transient
+        if ($result) {
+            delete_transient($transient_key);
+        }
+        
+        return $result;
     }
     
     /**
