@@ -1,0 +1,292 @@
+/* Emmriz Contact Form - Drag & Drop Builder Styles */
+.ecf-builder-wrap {
+    margin: 20px;
+}
+
+.ecf-builder-header {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px 8px 0 0;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.ecf-builder-title {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.ecf-builder-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.ecf-builder-content {
+    display: grid;
+    grid-template-columns: 250px 1fr 300px;
+    gap: 0;
+    background: #fff;
+    border-radius: 0 0 8px 8px;
+    min-height: 600px;
+}
+
+/* Fields Palette */
+.ecf-fields-palette {
+    background: #f8f9fa;
+    border-right: 1px solid #ddd;
+    padding: 20px;
+}
+
+.ecf-palette-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.ecf-field-types {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ecf-field-type {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+.ecf-field-type:hover {
+    border-color: #2271b1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.ecf-field-type .dashicons {
+    color: #666;
+}
+
+.ecf-field-type-label {
+    font-weight: 500;
+}
+
+/* Builder Canvas */
+.ecf-builder-canvas {
+    padding: 20px;
+    background: #fafafa;
+    min-height: 600px;
+    position: relative;
+}
+
+.ecf-builder-mode-tabs {
+    display: flex;
+    margin-bottom: 20px;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+
+.ecf-mode-tab {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.ecf-mode-tab.active {
+    background: #2271b1;
+    color: #fff;
+}
+
+.ecf-form-preview {
+    background: #fff;
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.ecf-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.ecf-empty-state .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 15px;
+    color: #ddd;
+}
+
+.ecf-form-fields {
+    min-height: 200px;
+}
+
+.ecf-form-field {
+    background: #fff;
+    border: 1px solid #e1e1e1;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: move;
+    position: relative;
+}
+
+.ecf-form-field:hover {
+    border-color: #2271b1;
+}
+
+.ecf-form-field.selected {
+    border-color: #2271b1;
+    background: #f0f6ff;
+}
+
+.ecf-field-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.ecf-field-label {
+    font-weight: 600;
+    color: #333;
+}
+
+.ecf-field-required {
+    color: #d63638;
+    margin-left: 4px;
+}
+
+.ecf-field-actions {
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.ecf-form-field:hover .ecf-field-actions {
+    opacity: 1;
+}
+
+.ecf-field-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666;
+    padding: 4px;
+    border-radius: 2px;
+}
+
+.ecf-field-action:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.ecf-field-preview {
+    pointer-events: none;
+}
+
+.ecf-field-preview input,
+.ecf-field-preview textarea,
+.ecf-field-preview select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.ecf-field-preview input:focus,
+.ecf-field-preview textarea:focus,
+.ecf-field-preview select:focus {
+    outline: none;
+    border-color: #2271b1;
+}
+
+/* Properties Panel */
+.ecf-properties-panel {
+    background: #f8f9fa;
+    border-left: 1px solid #ddd;
+    padding: 20px;
+}
+
+.ecf-properties-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.ecf-property-group {
+    margin-bottom: 20px;
+}
+
+.ecf-property-label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.ecf-property-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.ecf-property-input:focus {
+    outline: none;
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.ecf-property-checkbox {
+    margin-right: 8px;
+}
+
+.ecf-no-selection {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.ecf-no-selection .dashicons {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 10px;
+    color: #ddd;
+}
+
+/* Sortable Styles */
+.ecf-form-field.sortable-ghost {
+    opacity: 0.4;
+    background: #f0f0f0;
+}
+
+.ecf-form-field.sortable-chosen {
+    background: #f0f6ff;
+    border-color: #2271b1;
+}
+
+.ecf-field-type.sortable-ghost {
+    opacity: 0.4;
+}
