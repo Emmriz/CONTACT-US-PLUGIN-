@@ -74,7 +74,7 @@ $unread_count = $submissions_handler->get_unread_count($form_id);
                                     $preview_data = array_slice($submission_data, 0, 3);
                                     foreach ($preview_data as $key => $value):
                                         if (!empty($value) && !in_array($key, ['ecf_nonce', 'ecf_honeypot'])):
-                                            $label = $this->get_field_label($key, $form['data']['fields']);
+                                            $label = ECF_Template_Helper::get_field_label($key, $form['data']['fields']);
                                             ?>
                                             <div class="ecf-preview-item">
                                                 <strong><?php echo esc_html($label); ?>:</strong>
@@ -143,17 +143,3 @@ $unread_count = $submissions_handler->get_unread_count($form_id);
         </div>
     <?php endif; ?>
 </div>
-
-<?php
-/**
- * Get field label from field ID
- */
-function get_field_label($field_id, $form_fields) {
-    foreach ($form_fields as $field) {
-        if ($field['id'] === $field_id) {
-            return $field['label'];
-        }
-    }
-    return ucfirst(str_replace('_', ' ', $field_id));
-}
-?>
