@@ -44,6 +44,15 @@
                 return;
             }
 
+            // Check if AJAX is enabled
+            if (typeof ecf_ajax !== 'undefined' && ecf_ajax.enable_ajax !== '0') {
+                this.handleAjaxSubmission($form, formId, formData, $submitBtn);
+            } else {
+                this.handleRegularSubmission(form, $submitBtn);
+            }
+        }
+
+        handleAjaxSubmission($form, formId, formData, $submitBtn) {
             // Prepare data for AJAX
             const submissionData = {};
             for (let [key, value] of formData.entries()) {
@@ -70,13 +79,20 @@
                         this.showError($form, response.data.message, response.data.errors);
                     }
                 },
-                error: () => {
+                error: (xhr, status, error) => {
+                    console.error('AJAX Error:', status, error);
                     this.showError($form, 'An error occurred. Please try again.');
                 },
                 complete: () => {
                     $submitBtn.prop('disabled', false).removeClass('ecf-loading');
                 }
             });
+        }
+
+        handleRegularSubmission(form, $submitBtn) {
+            // For regular form submission, just let it submit naturally
+            $submitBtn.prop('disabled', false).removeClass('ecf-loading');
+            form.submit();
         }
 
         validateForm($form) {
