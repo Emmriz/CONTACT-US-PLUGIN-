@@ -95,7 +95,7 @@ $field_types = $drag_drop_builder->get_field_types();
                                         </div>
                                     </div>
                                     <div class="ecf-field-preview">
-                                        <?php echo $this->render_field_preview($field); ?>
+                                        <?php echo ECF_Template_Helper::render_field_preview($field); ?>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -131,50 +131,3 @@ $field_types = $drag_drop_builder->get_field_types();
     <input type="hidden" id="ecf-form-id" value="<?php echo esc_attr($form_id); ?>">
     <input type="hidden" id="ecf-form-data" value="<?php echo esc_attr(wp_json_encode($form['data'])); ?>">
 </div>
-
-<?php
-/**
- * Render field preview for builder
- */
-function render_field_preview($field) {
-    switch ($field['type']) {
-        case 'text':
-        case 'email':
-            return sprintf(
-                '<input type="%s" placeholder="%s" disabled>',
-                esc_attr($field['type']),
-                esc_attr($field['placeholder'])
-            );
-        
-        case 'textarea':
-            return sprintf(
-                '<textarea placeholder="%s" disabled></textarea>',
-                esc_attr($field['placeholder'])
-            );
-        
-        case 'select':
-            $options = isset($field['options']) ? $field['options'] : array('Option 1', 'Option 2');
-            $options_html = '';
-            foreach ($options as $option) {
-                $options_html .= sprintf('<option>%s</option>', esc_html($option));
-            }
-            return sprintf(
-                '<select disabled><option value="">%s</option>%s</select>',
-                esc_attr($field['placeholder']),
-                $options_html
-            );
-        
-        case 'submit':
-            return sprintf(
-                '<button type="button" disabled>%s</button>',
-                esc_html($field['label'])
-            );
-        
-        default:
-            return sprintf(
-                '<input type="text" placeholder="%s" disabled>',
-                esc_attr($field['placeholder'])
-            );
-    }
-}
-?>
