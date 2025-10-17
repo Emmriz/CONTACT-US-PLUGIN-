@@ -28,9 +28,10 @@ class ECF_Shortcodes {
     }
     
     /**
-     * Contact form shortcode handler
+     * Contact form shortcode handler - FIXED VERSION
      */
     public function contact_form_shortcode($atts) {
+        // Parse attributes
         $atts = shortcode_atts(array(
             'id' => 0,
             'title' => ''
@@ -50,8 +51,7 @@ class ECF_Shortcodes {
         }
         
         // Enqueue assets
-        wp_enqueue_style('ecf-frontend');
-        wp_enqueue_script('ecf-frontend');
+        $this->enqueue_frontend_assets();
         
         // Display form
         ob_start();
@@ -63,12 +63,33 @@ class ECF_Shortcodes {
      * Display form with optional success/error messages
      */
     private function display_form($form) {
-        // Check for submission result using the new method
+        // Check for submission result
         $form_handler = ECF_Form_Handler::get_instance();
         $submission_result = $form_handler->get_submission_result();
         
         // Include form template
-        include ECF_PLUGIN_PATH . 'templates/form-default.php';
+        $template_path = ECF_PLUGIN_PATH . 'templates/form-default.php';
+        
+        if (file_exists($template_path)) {
+            include $template_path;
+        } else {
+            echo '<p>' . __('Form template not found.', 'emmriz-contact-form') . '</p>';
+        }
+    }
+    
+    /**
+     * Enqueue frontend assets
+     */
+    private function enqueue_frontend_assets() {
+        wp_enqueue_style('ecf-frontend');
+        wp_enqueue_script('ecf-frontend');
+        
+        // Localize script for AJAX
+        wp_localize_script('ecf-frontend', 'ecf_ajax', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('ecf_ajax_nonce'),
+            'enable_ajax' => true
+        ));
     }
     
     /**
@@ -78,8 +99,7 @@ class ECF_Shortcodes {
         global $post;
         
         if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'emmriz_contact_form')) {
-            wp_enqueue_style('ecf-frontend');
-            wp_enqueue_script('ecf-frontend');
+            $this->enqueue_frontend_assets();
         }
     }
 }
